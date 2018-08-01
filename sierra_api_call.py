@@ -11,7 +11,8 @@ from configparser import ConfigParser, ExtendedInterpolation
 from email.mime.text import MIMEText
 
 """ 
-Utilizes the Sierra API to query the ILS. 
+Utilize the Sierra API to query the ILS for holdings information and upload it
+to the applicable FTP site. 
 """
 
 # Instantiate a configuration parser and then read the configuration file
@@ -44,6 +45,10 @@ id_split_length = 30
 # The amount of time to wait after a failed API call before trying again
 # Lowering this below 300 can cause problems
 api_retry_time = 300
+
+# Set to True to enable the marc files to be uploaded via FTP
+# Set to False to disable uploads (useful when you're debugging)
+ftp_enabled = True
 
 # String containing today's date in the format yyyy-mm-dd
 today = datetime.date.today().isoformat()
@@ -191,7 +196,8 @@ syndetics_json = '''
 def get_bearer_token():
     # Make the authentication call and return a dict with the bearer token
     auth_response = requests.post(sierra_config["auth_url"], headers=auth_headers)
-    bearer_token = auth_response.json()['access_token']
+    if 'access_token' in auth_response.json():
+        bearer_token = auth_response.json()['access_token']
 
     # Display the results of the authentication call
     if auth_response.status_code == requests.codes.ok:
@@ -262,6 +268,7 @@ def initiate_api_call(query_type):
     # updates the last_added file, and returns a string describing the results
     # Perform a GET request to generate a marc file of bib records with
     # the syndetics query
+    logging.info("Initiating call for {}".format(query_type.full_name))
     headers = get_bearer_token()
     chosen_date, last_updated_config = get_last_updated_date(query_type)
     ids = generate_id_list(query_type.json.format(date=chosen_date), headers)
@@ -281,7 +288,9 @@ def initiate_api_call(query_type):
         logging.info("Finished generating marc file for {}. Location: {}".format(query_type.full_name,final_path))
 
         # Upload the marc file to the appropriate FTP server
-        ftp_upload(config[query_type.ftp_config_string], final_path, query_type.ftp_directory + final_filename)
+        if ftp_enabled:
+            logging.info("Uploading marc file to {}".format(config[query_type.ftp_config_string]["ftp_host"]))
+            ftp_upload(config[query_type.ftp_config_string], final_path, query_type.ftp_directory + final_filename)
 
     # Update the file showing when the script was last run
     with open(path_config["last_updated_location"], 'w') as last_updated_file:
@@ -378,6 +387,12 @@ def validate_date(date):
     else:
         logging.info("Using date: {}".format(date))
 
+
+def logged_exception(exception_type, value, traceback):
+    #Define a custom exception handler that logs all exceptions
+    logging.critical("The following {} error occurred\n{}".format(str(exception_type.__name__), str(value))) 
+    logging.debug(traceback)
+sys.excepthook = logged_exception
 
 class QueryType:
     def __init__(self, short_name, full_name, json, ftp_config_string, ftp_directory = ""):
