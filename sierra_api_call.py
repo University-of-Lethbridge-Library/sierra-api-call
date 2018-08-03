@@ -11,8 +11,10 @@ from configparser import ConfigParser, ExtendedInterpolation
 from email.mime.text import MIMEText
 
 """ 
-Utilize the Sierra API to query the ILS for holdings information and upload it
-to the applicable FTP site. 
+A python script to update holdings information by querying a Library's Sierra API.
+The script is configured for three types of queries; updated records for Summon, deleted records for Summon, and updated records for Syndetics.
+When run with Python, the script will attempt to authenticate via the Sierra API, query the API for holdings changes, generate marc files for updated and/or deleted records, and upload those files to the appropriate FTP server(s).
+
 """
 
 # Instantiate a configuration parser and then read the configuration file
